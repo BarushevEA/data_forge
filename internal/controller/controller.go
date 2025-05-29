@@ -2,10 +2,9 @@ package controller
 
 import (
 	"context"
-	"database/sql"
 	"github.com/BarushevEA/data_forge/types"
 	lib "github.com/BarushevEA/in_memory_cache/types"
-	_ "modernc.org/sqlite"
+
 	"time"
 )
 
@@ -16,7 +15,7 @@ type TableController[T any] struct {
 	TTL          time.Duration
 	TTLDecrement time.Duration
 	cache        *lib.ICacheInMemory[T]
-	db           *sql.DB
+	//db           *sql.DB
 }
 
 func NewTableController[T any](option types.TableOption[T]) (types.ITable[T], error) {
