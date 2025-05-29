@@ -18,15 +18,15 @@ type SQLiteDB struct {
 }
 
 func NewSQLiteDB(dbPath string) (ITableDB, error) {
-	dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL&_busy_timeout=10000", dbPath)
+	dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL&_busy_timeout=10000&_mutex=full", dbPath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Hour)
 
 	pragmas := []string{
 		"PRAGMA page_size = 4096",
@@ -35,6 +35,8 @@ func NewSQLiteDB(dbPath string) (ITableDB, error) {
 		"PRAGMA synchronous = NORMAL",
 		"PRAGMA temp_store = MEMORY",
 		"PRAGMA busy_timeout = 5000",
+		"PRAGMA mmap_size = 30000000000",
+		"PRAGMA wal_autocheckpoint = 1000",
 	}
 
 	for _, pragma := range pragmas {
