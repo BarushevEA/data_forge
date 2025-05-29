@@ -7,7 +7,7 @@ const (
             value BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        ) WITHOUT ROWID
     `
 	DROP_TABLE = `DROP TABLE IF EXISTS %s`
 	SET_VALUE  = `
@@ -17,9 +17,11 @@ const (
             value = excluded.value,
             updated_at = CURRENT_TIMESTAMP
     `
-	GET_VALUE    = `SELECT value FROM %s WHERE key = ?`
-	DELETE_VALUE = `DELETE FROM %s WHERE key = ?`
-
-	// Base query for batch get operations. Requires dynamic formatting of IN clause
+	BATCH_SET_VALUE = `
+        INSERT OR FAIL INTO %s (key, value, updated_at) 
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    `
+	GET_VALUE      = `SELECT value FROM %s WHERE key = ?`
+	DELETE_VALUE   = `DELETE FROM %s WHERE key = ?`
 	BATCH_GET_BASE = `SELECT key, value FROM %s WHERE key IN `
 )
