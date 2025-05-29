@@ -1,5 +1,7 @@
 package db
 
+import "time"
+
 const (
 	CREATE_TABLE = `
         CREATE TABLE IF NOT EXISTS %s (
@@ -25,3 +27,10 @@ const (
 	DELETE_VALUE   = `DELETE FROM %s WHERE key = ?`
 	BATCH_GET_BASE = `SELECT key, value FROM %s WHERE key IN `
 )
+
+// ConnectionOptions holds sql.DB specific settings
+type ConnectionOptions struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+}

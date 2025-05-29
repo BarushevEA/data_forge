@@ -17,34 +17,32 @@ type SQLiteDB struct {
 	stmts lib.ICacheInMemory[*sql.Stmt]
 }
 
-func NewSQLiteDB(dbPath string) (ITableDB, error) {
-	dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL&_busy_timeout=10000&_mutex=full", dbPath)
-	db, err := sql.Open("sqlite", dsn)
+func NewSQLiteDB(opts ISQLiteOptions) (ITableDB, error) {
+	if opts == nil {
+		return nil, errors.New("options cannot be nil")
+	}
+
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid options: %v", err)
+	}
+
+	if opts.GetPath() == "" {
+		return nil, errors.New("database path is required")
+	}
+
+	db, err := sql.Open("sqlite", opts.ToDSN())
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Hour)
+	connOpts := opts.GetConnectionOptions()
+	db.SetMaxOpenConns(connOpts.MaxOpenConns)
+	db.SetMaxIdleConns(connOpts.MaxIdleConns)
+	db.SetConnMaxLifetime(connOpts.ConnMaxLifetime)
 
-	pragmas := []string{
-		"PRAGMA page_size = 4096",
-		"PRAGMA cache_size = -2000000",
-		"PRAGMA journal_mode = WAL",
-		"PRAGMA synchronous = NORMAL",
-		"PRAGMA temp_store = MEMORY",
-		"PRAGMA busy_timeout = 5000",
-		"PRAGMA mmap_size = 30000000000",
-		"PRAGMA wal_autocheckpoint = 1000",
-	}
-
-	for _, pragma := range pragmas {
+	for _, pragma := range opts.ToPragmas() {
 		if _, err := db.Exec(pragma); err != nil {
-			err := db.Close()
-			if err != nil {
-				return nil, err
-			}
+			_ = db.Close()
 			return nil, fmt.Errorf("failed to set %s: %v", pragma, err)
 		}
 	}

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func setupTestDB(t *testing.T) (*SQLiteDB, context.Context, func()) {
@@ -18,17 +20,19 @@ func setupTestDB(t *testing.T) (*SQLiteDB, context.Context, func()) {
 	}
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := NewSQLiteDB(dbPath)
+
+	opts := NewSQLiteOptions(dbPath)
+	db, err := NewSQLiteDB(opts)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatal(err)
 	}
 
 	ctx := context.Background()
 
 	cleanup := func() {
-		db.Close()
-		os.RemoveAll(tmpDir)
+		_ = db.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return db.(*SQLiteDB), ctx, cleanup
@@ -307,7 +311,8 @@ func TestSQLiteDB_ResourceCleanup(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := NewSQLiteDB(dbPath)
+	opts := NewSQLiteOptions(dbPath)
+	db, err := NewSQLiteDB(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,4 +467,402 @@ func TestSQLiteDB_InputBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSQLiteOptions(t *testing.T) {
+	tests := []struct {
+		name     string
+		basePath string
+		opts     SQLiteOptions
+		want     SQLiteOptions
+	}{
+		{
+			name:     "default options",
+			basePath: "test.db",
+			opts:     SQLiteOptions{},
+			want: SQLiteOptions{
+				Path:              "test.db",
+				MaxOpenConns:      10,
+				MaxIdleConns:      5,
+				ConnMaxLifetime:   time.Hour,
+				PageSize:          4096,
+				CacheSize:         -2000000,
+				JournalMode:       "WAL",
+				SyncMode:          "NORMAL",
+				TempStore:         "MEMORY",
+				BusyTimeout:       5000,
+				MMapSize:          30000000000,
+				WalAutocheckpoint: 1000,
+			},
+		},
+		{
+			name:     "custom options",
+			basePath: "test.db",
+			opts: SQLiteOptions{
+				MaxOpenConns: 20,
+				CacheSize:    -4000000,
+				SyncMode:     "OFF",
+			},
+			want: SQLiteOptions{
+				Path:              "test.db",
+				MaxOpenConns:      20,
+				MaxIdleConns:      5,
+				ConnMaxLifetime:   time.Hour,
+				PageSize:          4096,
+				CacheSize:         -4000000,
+				JournalMode:       "WAL",
+				SyncMode:          "OFF",
+				TempStore:         "MEMORY",
+				BusyTimeout:       5000,
+				MMapSize:          30000000000,
+				WalAutocheckpoint: 1000,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := NewSQLiteOptions(tt.basePath)
+			got := base.WithOptions(tt.opts)
+			gotOpts := got.(*SQLiteOptions)
+
+			if !reflect.DeepEqual(*gotOpts, tt.want) {
+				t.Errorf("WithOptions() = %v, want %v", *gotOpts, tt.want)
+			}
+		})
+	}
+}
+
+func TestSQLiteDB_WithCustomOptions(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Тестируем создание БД с кастомными опциями
+	opts := NewSQLiteOptions(dbPath).WithOptions(SQLiteOptions{
+		MaxOpenConns: 20,
+		CacheSize:    -4000000,
+		SyncMode:     "OFF",
+	})
+
+	db, err := NewSQLiteDB(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Проверяем базовую функциональность с кастомными настройками
+	ctx := context.Background()
+	tableName := "test_table"
+
+	if err := db.CreateTable(ctx, tableName); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Set(ctx, tableName, "key", []byte("value")); err != nil {
+		t.Fatal(err)
+	}
+
+	value, exists, err := db.Get(ctx, tableName, "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Error("Value should exist")
+	}
+	if string(value) != "value" {
+		t.Errorf("Got %s, want value", string(value))
+	}
+}
+
+func TestSQLiteOptions_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*SQLiteOptions)
+		wantErr string
+	}{
+		{
+			name: "empty path",
+			modify: func(o *SQLiteOptions) {
+				o.Path = ""
+			},
+			wantErr: "database path is required",
+		},
+		{
+			name: "negative max connections",
+			modify: func(o *SQLiteOptions) {
+				o.Path = "test.db"
+				o.MaxOpenConns = -1
+			},
+			wantErr: "max open connections cannot be negative",
+		},
+		{
+			name: "invalid journal mode",
+			modify: func(o *SQLiteOptions) {
+				o.Path = "test.db"
+				o.JournalMode = "INVALID"
+			},
+			wantErr: "invalid journal mode",
+		},
+		{
+			name: "invalid sync mode",
+			modify: func(o *SQLiteOptions) {
+				o.Path = "test.db"
+				o.SyncMode = "INVALID"
+			},
+			wantErr: "invalid sync mode",
+		},
+		{
+			name: "negative busy timeout",
+			modify: func(o *SQLiteOptions) {
+				o.Path = "test.db"
+				o.BusyTimeout = -1
+			},
+			wantErr: "busy timeout cannot be negative",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewSQLiteOptions("test.db")
+			tt.modify(opts.(*SQLiteOptions))
+
+			err := opts.Validate()
+			if err == nil && tt.wantErr != "" {
+				t.Errorf("Validate() expected error = %v, got nil", tt.wantErr)
+			}
+			if err != nil && err.Error() != tt.wantErr {
+				t.Errorf("Validate() error message = %v, want %v", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSQLiteOptions_Validation_ExtendedCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*SQLiteOptions)
+		wantErr string
+	}{
+		{
+			name: "too large page size",
+			modify: func(o *SQLiteOptions) {
+				o.PageSize = 65537
+			},
+			wantErr: "page size must be a power of 2 between 512 and 65536",
+		},
+		{
+			name: "invalid temp store value",
+			modify: func(o *SQLiteOptions) {
+				o.TempStore = "INVALID"
+			},
+			wantErr: "invalid temp store value",
+		},
+		{
+			name: "too small cache size",
+			modify: func(o *SQLiteOptions) {
+				o.CacheSize = -2147483649
+			},
+			wantErr: "cache size too small",
+		},
+		{
+			name: "too large wal checkpoint",
+			modify: func(o *SQLiteOptions) {
+				o.WalAutocheckpoint = 1000001
+			},
+			wantErr: "wal autocheckpoint must be between 0 and 1000000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewSQLiteOptions("test.db")
+			tt.modify(opts.(*SQLiteOptions))
+
+			err := opts.Validate()
+			if err == nil && tt.wantErr != "" {
+				t.Errorf("Validate() expected error = %v, got nil", tt.wantErr)
+			}
+			if err != nil && err.Error() != tt.wantErr {
+				t.Errorf("Validate() error message = %v, want %v", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSQLiteOptions_DSNFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     SQLiteOptions
+		wantDSN  string
+		wantPath string
+	}{
+		{
+			name: "simple path",
+			opts: SQLiteOptions{
+				Path:        "test.db",
+				BusyTimeout: 5000,
+			},
+			wantDSN:  "file:test.db?cache=shared&_journal_mode=WAL&_busy_timeout=5000&_mutex=full",
+			wantPath: "test.db",
+		},
+		{
+			name: "path with spaces",
+			opts: SQLiteOptions{
+				Path:        "test path/db.sqlite",
+				BusyTimeout: 5000,
+			},
+			wantDSN:  "file:test path/db.sqlite?cache=shared&_journal_mode=WAL&_busy_timeout=5000&_mutex=full",
+			wantPath: "test path/db.sqlite",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewSQLiteOptions(tt.opts.Path)
+			if got := opts.ToDSN(); got != tt.wantDSN {
+				t.Errorf("ToDSN() = %v, want %v", got, tt.wantDSN)
+			}
+			if got := opts.GetPath(); got != tt.wantPath {
+				t.Errorf("GetPath() = %v, want %v", got, tt.wantPath)
+			}
+		})
+	}
+}
+
+func TestSQLiteOptions_PragmaFormat(t *testing.T) {
+	opts := SQLiteOptions{
+		Path:              "test.db",
+		PageSize:          4096,
+		CacheSize:         -2000000,
+		JournalMode:       "WAL",
+		SyncMode:          "NORMAL",
+		TempStore:         "MEMORY",
+		BusyTimeout:       5000,
+		MMapSize:          30000000000,
+		WalAutocheckpoint: 1000,
+	}
+
+	expected := []string{
+		"PRAGMA page_size = 4096",
+		"PRAGMA cache_size = -2000000",
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA temp_store = MEMORY",
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA mmap_size = 30000000000",
+		"PRAGMA wal_autocheckpoint = 1000",
+	}
+
+	pragmas := opts.ToPragmas()
+
+	if len(pragmas) != len(expected) {
+		t.Errorf("ToPragmas() returned %d items, want %d", len(pragmas), len(expected))
+	}
+
+	for i, want := range expected {
+		if i >= len(pragmas) {
+			t.Errorf("Missing pragma: %s", want)
+			continue
+		}
+		if pragmas[i] != want {
+			t.Errorf("Pragma[%d] = %v, want %v", i, pragmas[i], want)
+		}
+	}
+}
+
+func TestSQLiteOptions_ConnectionOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		opts SQLiteOptions
+		want ConnectionOptions
+	}{
+		{
+			name: "default values",
+			opts: SQLiteOptions{
+				Path:            "test.db",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+			want: ConnectionOptions{
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "custom values",
+			opts: SQLiteOptions{
+				Path:            "test.db",
+				MaxOpenConns:    20,
+				MaxIdleConns:    10,
+				ConnMaxLifetime: 2 * time.Hour,
+			},
+			want: ConnectionOptions{
+				MaxOpenConns:    20,
+				MaxIdleConns:    10,
+				ConnMaxLifetime: 2 * time.Hour,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.opts.GetConnectionOptions()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetConnectionOptions() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSQLiteOptions_WithOptions_Immutability(t *testing.T) {
+	original := NewSQLiteOptions("test.db")
+	originalOpts := original.(*SQLiteOptions)
+
+	// Test successful modification
+	validModification := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Valid modification panicked: %v", r)
+			}
+		}()
+
+		modified := original.WithOptions(SQLiteOptions{
+			MaxOpenConns: 20,
+			CacheSize:    -4000000,
+		})
+
+		// Check original wasn't modified
+		if originalOpts.MaxOpenConns != 10 {
+			t.Errorf("Original MaxOpenConns changed: got %v, want 10", originalOpts.MaxOpenConns)
+		}
+
+		// Check new values
+		modifiedOpts := modified.(*SQLiteOptions)
+		if modifiedOpts.MaxOpenConns != 20 {
+			t.Errorf("Modified MaxOpenConns wrong: got %v, want 20", modifiedOpts.MaxOpenConns)
+		}
+	}
+
+	// Test invalid modification
+	invalidModification := func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Invalid modification should panic")
+			}
+		}()
+
+		_ = original.WithOptions(SQLiteOptions{
+			MaxOpenConns: -1, // Invalid value
+		})
+	}
+
+	validModification()
+	invalidModification()
 }
