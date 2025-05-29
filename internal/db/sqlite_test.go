@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -865,4 +866,249 @@ func TestSQLiteOptions_WithOptions_Immutability(t *testing.T) {
 
 	validModification()
 	invalidModification()
+}
+
+func TestSQLiteDB_InvalidPath(t *testing.T) {
+	// Test non-existent directory
+	invalidPath := "/nonexistent/dir/test.db"
+	opts := NewSQLiteOptions(invalidPath)
+	db, err := NewSQLiteDB(opts)
+	if err == nil {
+		_ = db.Close()
+		t.Error("Expected error for non-existent directory")
+	}
+
+	// Test empty path
+	opts = NewSQLiteOptions("")
+	db, err = NewSQLiteDB(opts)
+	if err == nil {
+		_ = db.Close()
+		t.Error("Expected error for empty path")
+	}
+
+	// Test path with invalid characters
+	invalidPath = "|*?"
+	opts = NewSQLiteOptions(invalidPath)
+	db, err = NewSQLiteDB(opts)
+	if err == nil {
+		_ = db.Close()
+		t.Error("Expected error for path with invalid characters")
+	}
+}
+
+func TestSQLiteDB_MaxConnections(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	maxConns := 2
+
+	opts := NewSQLiteOptions(dbPath).WithOptions(SQLiteOptions{
+		MaxOpenConns: maxConns,
+		MaxIdleConns: 1,
+	})
+
+	db, err := NewSQLiteDB(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create table for testing
+	tableName := "test_table"
+	if err := db.CreateTable(ctx, tableName); err != nil {
+		t.Fatal(err)
+	}
+
+	// Channel to track active connections
+	activeConns := make(chan struct{}, maxConns)
+	var wg sync.WaitGroup
+
+	// Try to create maxConns + 1 connections
+	for i := 0; i < maxConns+1; i++ {
+		wg.Add(1)
+		go func(connID int) {
+			defer wg.Done()
+
+			// Try to acquire connection
+			tx, err := db.(*SQLiteDB).db.BeginTx(ctx, &sql.TxOptions{
+				Isolation: sql.LevelSerializable,
+			})
+			if err != nil {
+				if connID >= maxConns {
+					// Expected error for connections beyond maxConns
+					return
+				}
+				t.Errorf("Unexpected error on connection %d: %v", connID, err)
+				return
+			}
+			defer tx.Rollback()
+
+			// Successfully acquired connection
+			select {
+			case activeConns <- struct{}{}:
+				// Wait a bit to ensure connection is held
+				time.Sleep(100 * time.Millisecond)
+				<-activeConns
+			default:
+				t.Errorf("Connection %d succeeded but exceeded max connections", connID)
+			}
+		}(i)
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Test completed successfully
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out")
+	}
+}
+
+func TestSQLiteDB_ConnectionLifetime(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	shortLifetime := 100 * time.Millisecond
+
+	opts := NewSQLiteOptions(dbPath).WithOptions(SQLiteOptions{
+		MaxIdleConns:    2,
+		ConnMaxLifetime: shortLifetime,
+	})
+
+	db, err := NewSQLiteDB(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	tableName := "test_table"
+	if err := db.CreateTable(ctx, tableName); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 5; i++ {
+		if err := db.Set(ctx, tableName, fmt.Sprintf("key_%d", i), []byte("value")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	time.Sleep(shortLifetime * 2)
+
+	if err := db.Set(ctx, tableName, "new_key", []byte("value")); err != nil {
+		t.Errorf("Failed to execute query after connection lifetime: %v", err)
+	}
+}
+
+func TestSQLiteDB_ManyTables(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	opts := NewSQLiteOptions(dbPath)
+	db, err := NewSQLiteDB(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	tableCount := 100
+
+	for i := 0; i < tableCount; i++ {
+		tableName := fmt.Sprintf("test_table_%d", i)
+		if err := db.CreateTable(ctx, tableName); err != nil {
+			t.Fatalf("Failed to create table %s: %v", tableName, err)
+		}
+
+		if err := db.Set(ctx, tableName, "key", []byte("value")); err != nil {
+			t.Fatalf("Failed to insert into table %s: %v", tableName, err)
+		}
+	}
+
+	for i := 0; i < tableCount; i++ {
+		tableName := fmt.Sprintf("test_table_%d", i)
+		value, exists, err := db.Get(ctx, tableName, "key")
+		if err != nil {
+			t.Errorf("Failed to get from table %s: %v", tableName, err)
+		}
+		if !exists {
+			t.Errorf("Value not found in table %s", tableName)
+		}
+		if string(value) != "value" {
+			t.Errorf("Wrong value in table %s: got %s, want value", tableName, string(value))
+		}
+	}
+}
+
+func TestSQLiteDB_DiskSpaceHandling(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	opts := NewSQLiteOptions(dbPath)
+	db, err := NewSQLiteDB(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	tableName := "test_table"
+
+	if err := db.CreateTable(ctx, tableName); err != nil {
+		t.Fatal(err)
+	}
+
+	largeValue := make([]byte, 1024*1024)
+	for i := range largeValue {
+		largeValue[i] = byte(i % 256)
+	}
+
+	maxAttempts := 100
+	var lastError error
+
+	for i := 0; i < maxAttempts; i++ {
+		err := db.Set(ctx, tableName, fmt.Sprintf("key_%d", i), largeValue)
+		if err != nil {
+			lastError = err
+			break
+		}
+	}
+
+	if lastError != nil {
+		value, exists, err := db.Get(ctx, tableName, "key_0")
+		if err != nil {
+			t.Errorf("Failed to read data after disk space error: %v", err)
+		}
+		if !exists {
+			t.Error("Previously written data should still exist")
+		}
+		if exists && !bytes.Equal(value, largeValue) {
+			t.Error("Data corruption detected")
+		}
+	}
 }
