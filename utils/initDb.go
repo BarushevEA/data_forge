@@ -1,4 +1,4 @@
-package pkg
+package utils
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ var dataBase db.ITableDB
 var dbConfig *types.DBConfig
 var initOnce sync.Once
 
-func getDB() (db.ITableDB, error) {
+func GetDB() (db.ITableDB, error) {
 	var initError error
 
 	initOnce.Do(func() {
@@ -20,13 +20,13 @@ func getDB() (db.ITableDB, error) {
 		}
 
 		if dbConfig == nil {
-			dbConfig = types.GetDBConfig()
+			dbConfig = GetDBConfig()
 			if dbConfig == nil {
-				dbConfig = types.DefaultDBConfig()
+				dbConfig = DefaultDBConfig()
 			}
 		}
 
-		if err := dbConfig.Validate(); err != nil {
+		if err := ValidateDBConfig(dbConfig); err != nil {
 			initError = err
 			return
 		}
