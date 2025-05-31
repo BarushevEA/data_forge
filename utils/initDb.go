@@ -34,7 +34,8 @@ func GetDB() (db.ITableDB, error) {
 		switch dbConfig.DBType {
 		case "sqlite":
 			var err error
-			dataBase, err = db.NewSQLiteDB(db.NewSQLiteOptions(dbConfig.DBPath))
+
+			dataBase, err = db.NewSQLiteDB(getSQLiteOptions())
 			if err != nil {
 				initError = err
 			}
@@ -48,4 +49,25 @@ func GetDB() (db.ITableDB, error) {
 	}
 
 	return dataBase, nil
+}
+
+func getSQLiteOptions() db.ISQLiteOptions {
+	options := db.NewSQLiteOptions(dbConfig.DBPath)
+
+	if dbConfig.Options == nil {
+		return options
+	}
+
+	var customOptions types.SQLiteOptions
+
+	saved, exists := dbConfig.Options["sqlite"]
+	if exists {
+		customOptions, exists = saved.(types.SQLiteOptions)
+	}
+
+	if exists {
+		options.WithOptions(db.SQLiteOptions(customOptions))
+	}
+
+	return options
 }
