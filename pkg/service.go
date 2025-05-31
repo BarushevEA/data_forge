@@ -6,6 +6,7 @@ import (
 	"github.com/BarushevEA/data_forge/utils"
 )
 
+// CreateTable creates and initializes a new table with the given options and returns a Table interface or an error.
 func CreateTable[T any](options types.TableOption[T]) (types.ITable[T], error) {
 	dBase, err := utils.GetDB()
 	if err != nil {

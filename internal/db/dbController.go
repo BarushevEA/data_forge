@@ -9,7 +9,6 @@ import (
 	lib "github.com/BarushevEA/in_memory_cache/types"
 	_ "modernc.org/sqlite"
 	"strings"
-	"time"
 )
 
 type SQLiteDB struct {
@@ -47,12 +46,13 @@ func NewSQLiteDB(opts ISQLiteOptions) (ITableDB, error) {
 		}
 	}
 
+	stmtsOptions := GetLongDefaultShardedCacheOptions()
 	return &SQLiteDB{
 		db: db,
 		stmts: pkg.NewShardedCache[*sql.Stmt](
-			context.Background(),
-			1000000*time.Hour, // TTL
-			10000*time.Hour,   // TTL decrement
+			stmtsOptions.ctx,
+			stmtsOptions.ttl,          // TTL
+			stmtsOptions.ttlDecrement, // TTL decrement
 		),
 	}, nil
 }
