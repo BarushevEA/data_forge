@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
+	"github.com/BarushevEA/data_forge/types"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	lib "github.com/BarushevEA/in_memory_cache/types"
 	_ "modernc.org/sqlite"
@@ -47,15 +48,19 @@ func NewSQLiteDB(opts ISQLiteOptions) (dbTypes.ITableDB, error) {
 		}
 	}
 
-	stmtsOptions := GetLongDefaultShardedCacheOptions()
+	stmtsOptions := dbTypes.GetLongDefaultShardedCacheOptions()
 	return &SQLiteDB{
 		db: db,
 		stmts: pkg.NewShardedCache[*sql.Stmt](
-			stmtsOptions.ctx,
-			stmtsOptions.ttl,          // TTL
-			stmtsOptions.ttlDecrement, // TTL decrement
+			stmtsOptions.Ctx,
+			stmtsOptions.Ttl,          // TTL
+			stmtsOptions.TtlDecrement, // TTL decrement
 		),
 	}, nil
+}
+
+func (controller *SQLiteDB) RegisterTable(tableName string, tableType types.ITable[any]) error {
+	return nil
 }
 
 // prepareStmt prepares and caches the statement for the table

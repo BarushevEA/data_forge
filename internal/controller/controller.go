@@ -104,3 +104,7 @@ func (table *TableController[T]) Len() int {
 	//TODO implement me
 	panic("implement me")
 }
+
+func (table *TableController[T]) Serialize(key string) ([]byte, error) {
+	return nil, nil
+}

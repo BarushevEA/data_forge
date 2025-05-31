@@ -1,8 +1,13 @@
 package dbTypes
 
-import "context"
+import (
+	"context"
+	"github.com/BarushevEA/data_forge/types"
+)
 
 type ITableDB interface {
+	RegisterTable(tableName string, tableType types.ITable[any]) error
+
 	// CreateTable creates a new table with the given name
 	CreateTable(ctx context.Context, name string) error
 

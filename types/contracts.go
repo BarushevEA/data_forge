@@ -62,4 +62,6 @@ type ITable[T any] interface {
 
 	// Len returns the current number of elements in the table
 	Len() int
+
+	Serialize(key string) ([]byte, error)
 }

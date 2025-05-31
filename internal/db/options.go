@@ -1,11 +1,9 @@
 package db
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -187,31 +185,4 @@ func (options *SQLiteOptions) Validate() error {
 	}
 
 	return nil
-}
-
-var DefaultShardedCacheOptions *ShardedCacheOptions
-var initOnceShardedCacheOptions sync.Once
-
-type ShardedCacheOptions struct {
-	ctx          context.Context
-	ttl          time.Duration
-	ttlDecrement time.Duration
-}
-
-func NewShardedCacheOptions(ctx context.Context, ttl time.Duration, ttlDecrement time.Duration) *ShardedCacheOptions {
-	return &ShardedCacheOptions{
-		ctx:          ctx,
-		ttl:          ttl,
-		ttlDecrement: ttlDecrement,
-	}
-}
-
-func GetLongDefaultShardedCacheOptions() *ShardedCacheOptions {
-	initOnceShardedCacheOptions.Do(func() {
-		if DefaultShardedCacheOptions == nil {
-			DefaultShardedCacheOptions = NewShardedCacheOptions(context.Background(), 1000000*time.Hour, 10000*time.Hour)
-		}
-	})
-
-	return DefaultShardedCacheOptions
 }
