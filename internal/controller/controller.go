@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"github.com/BarushevEA/data_forge/internal/db"
+	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/data_forge/types"
 	lib "github.com/BarushevEA/in_memory_cache/types"
 
@@ -16,10 +16,10 @@ type TableController[T any] struct {
 	TTL          time.Duration
 	TTLDecrement time.Duration
 	cache        lib.ICacheInMemory[T]
-	db           db.ITableDB
+	db           dbTypes.ITableDB
 }
 
-func NewTableController[T any](option types.TableOption[T], db db.ITableDB) (types.ITable[T], error) {
+func NewTableController[T any](option types.TableOption[T], db dbTypes.ITableDB) (types.ITable[T], error) {
 	return &TableController[T]{
 		db:           db,
 		TableName:    option.TableName,

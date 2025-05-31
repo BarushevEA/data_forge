@@ -3,15 +3,16 @@ package utils
 import (
 	"fmt"
 	"github.com/BarushevEA/data_forge/internal/db"
+	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/data_forge/types"
 	"sync"
 )
 
-var dataBase db.ITableDB
+var dataBase dbTypes.ITableDB
 var dbConfig *types.DBConfig
 var initOnce sync.Once
 
-func GetDB() (db.ITableDB, error) {
+func GetDB() (dbTypes.ITableDB, error) {
 	var initError error
 
 	initOnce.Do(func() {

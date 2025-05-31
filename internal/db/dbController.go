@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	lib "github.com/BarushevEA/in_memory_cache/types"
 	_ "modernc.org/sqlite"
@@ -16,7 +17,7 @@ type SQLiteDB struct {
 	stmts lib.ICacheInMemory[*sql.Stmt]
 }
 
-func NewSQLiteDB(opts ISQLiteOptions) (ITableDB, error) {
+func NewSQLiteDB(opts ISQLiteOptions) (dbTypes.ITableDB, error) {
 	if opts == nil {
 		return nil, errors.New("options cannot be nil")
 	}
