@@ -2,6 +2,7 @@ package dbPool
 
 import (
 	"context"
+	"fmt"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	"github.com/BarushevEA/in_memory_cache/types"
@@ -20,12 +21,14 @@ type PoolController struct {
 	writePool  types.ICacheInMemory[[]string]
 	deletePool types.ICacheInMemory[[]string]
 	tables     types.ICacheInMemory[dbTypes.ITableRegister]
+
+	stopChan chan struct{}
+	ticker   *time.Ticker
 }
 
 func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int) dbTypes.ITableDB {
 	stmtsOptions := dbTypes.GetLongDefaultShardedCacheOptions()
-
-	return &PoolController{
+	controller := &PoolController{
 		db:                db,
 		writePoolInterval: writePoolInterval,
 		maxPoolSize:       maxPoolSize,
@@ -45,7 +48,12 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
 		),
+		stopChan: make(chan struct{}),
+		ticker:   time.NewTicker(writePoolInterval),
 	}
+
+	controller.Start()
+	return controller
 }
 
 func (controller *PoolController) RegisterTable(tableName string, table dbTypes.ITableRegister) error {
@@ -126,6 +134,14 @@ func (controller *PoolController) writePoolFlush(tableName string) error {
 		return nil
 	}
 
+	err := controller.writeKeys(tableName, writeKeys)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (controller *PoolController) writeKeys(tableName string, writeKeys []string) error {
 	table, ok := controller.tables.Get(tableName)
 	if !ok {
 		return nil
@@ -155,16 +171,26 @@ func (controller *PoolController) deletePoolFlush(tableName string) error {
 		return nil
 	}
 
+	err := controller.deleteKeys(tableName, deleteKeys)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (controller *PoolController) deleteKeys(tableName string, deleteKeys []string) error {
 	writeKeys, ok := controller.writePool.Get(tableName)
 
 	newWriteKeys := make([]string, 0, len(writeKeys))
 
 	for _, deleteKey := range deleteKeys {
-		for _, writeKey := range writeKeys {
-			if deleteKey == writeKey {
-				continue
+		if ok {
+			for _, writeKey := range writeKeys {
+				if deleteKey == writeKey {
+					continue
+				}
+				newWriteKeys = append(newWriteKeys, writeKey)
 			}
-			newWriteKeys = append(newWriteKeys, writeKey)
 		}
 
 		err := controller.db.Delete(context.Background(), tableName, deleteKey)
@@ -180,4 +206,45 @@ func (controller *PoolController) deletePoolFlush(tableName string) error {
 
 	controller.deletePool.Delete(tableName)
 	return nil
+}
+
+func (controller *PoolController) Start() {
+	go func() {
+		for {
+			select {
+			case <-controller.ticker.C:
+				controller.deletePoolFlushAll()
+				controller.writePoolFlushAll()
+			case <-controller.stopChan:
+			}
+		}
+	}()
+}
+
+func (controller *PoolController) deletePoolFlushAll() {
+	err := controller.deletePool.Range(func(tableName string, keys []string) bool {
+		err := controller.deleteKeys(tableName, keys)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		return true
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func (controller *PoolController) writePoolFlushAll() {
+	err := controller.writePool.Range(func(tableName string, keys []string) bool {
+		err := controller.writeKeys(tableName, keys)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		return true
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
 }
