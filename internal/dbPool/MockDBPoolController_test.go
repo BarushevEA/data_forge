@@ -144,7 +144,11 @@ func TestPoolController_BasicOperations(t *testing.T) {
 	// Initialize test environment
 	mockDB := NewMockDB()
 	controller := NewPoolController(mockDB, time.Millisecond*100, 2, true, true).(*PoolController)
-	defer controller.Close()
+	defer func(controller *PoolController) {
+		err := controller.Close()
+		if err != nil {
+		}
+	}(controller)
 
 	ctx := context.Background()
 	tableName := "test_table"
@@ -160,7 +164,7 @@ func TestPoolController_BasicOperations(t *testing.T) {
 	})
 
 	t.Run("set and get operations", func(t *testing.T) {
-		// Add value to pool (should not be in DB yet)
+		// Add value to the pool (should not be in DB yet)
 		err := controller.Set(ctx, tableName, "key1", []byte("value1"))
 		if err != nil {
 			t.Errorf("Set failed: %v", err)
@@ -172,13 +176,13 @@ func TestPoolController_BasicOperations(t *testing.T) {
 			t.Error("Value should not be in DB yet")
 		}
 
-		// Add second key to trigger flush due to maxPoolSize
+		// Add a second key to trigger flush due to maxPoolSize
 		err = controller.Set(ctx, tableName, "key2", []byte("value2"))
 		if err != nil {
 			t.Errorf("Set failed: %v", err)
 		}
 
-		// Wait for flush operation
+		// Wait for a flush operation
 		time.Sleep(time.Millisecond * 150)
 
 		// Now values should be in DB
@@ -200,7 +204,7 @@ func TestPoolController_BasicOperations(t *testing.T) {
 			t.Errorf("Delete failed: %v", err)
 		}
 
-		// Wait for periodic flush
+		// Wait for a periodic flush
 		time.Sleep(time.Millisecond * 150)
 
 		// Check value is deleted
@@ -215,7 +219,11 @@ func TestPoolController_BasicOperations(t *testing.T) {
 func TestPoolController_ErrorHandling(t *testing.T) {
 	mockDB := NewMockDB()
 	controller := NewPoolController(mockDB, time.Millisecond*100, 2, true, true).(*PoolController)
-	defer controller.Close()
+	defer func(controller *PoolController) {
+		err := controller.Close()
+		if err != nil {
+		}
+	}(controller)
 
 	ctx := context.Background()
 	tableName := "test_table"
@@ -232,13 +240,13 @@ func TestPoolController_ErrorHandling(t *testing.T) {
 		// Set DB error
 		mockDB.setErr = errors.New("db error")
 
-		// Set should not immediately return error
+		// Set should not immediately return an error
 		err := controller.Set(ctx, tableName, "key1", []byte("value1"))
 		if err != nil {
 			t.Errorf("Set should not return error immediately: %v", err)
 		}
 
-		// Wait for flush operation
+		// Wait for a flush operation
 		time.Sleep(time.Millisecond * 150)
 	})
 
@@ -250,16 +258,19 @@ func TestPoolController_ErrorHandling(t *testing.T) {
 			t.Errorf("Set should not return error immediately: %v", err)
 		}
 
-		// Wait for flush operation
+		// Wait for a flush operation
 		time.Sleep(time.Millisecond * 150)
 	})
 }
 
 func TestPoolController_ConcurrentOperations(t *testing.T) {
 	mockDB := NewMockDB()
-	// Увеличим интервал обновления для более стабильной работы
 	controller := NewPoolController(mockDB, time.Millisecond*50, 10, true, true).(*PoolController)
-	defer controller.Close()
+	defer func(controller *PoolController) {
+		err := controller.Close()
+		if err != nil {
+		}
+	}(controller)
 
 	ctx := context.Background()
 	tableName := "test_table"
@@ -276,7 +287,6 @@ func TestPoolController_ConcurrentOperations(t *testing.T) {
 	numGoroutines := 10
 	operationsPerGoroutine := 100
 
-	// Запускаем параллельные операции записи
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -287,17 +297,14 @@ func TestPoolController_ConcurrentOperations(t *testing.T) {
 				if err != nil {
 					t.Errorf("concurrent Set failed: %v", err)
 				}
-				// Добавляем небольшую задержку между операциями
 				time.Sleep(time.Millisecond)
 			}
 		}(i)
 	}
 
 	wg.Wait()
-	// Увеличиваем время ожидания для гарантированного завершения всех flush операций
 	time.Sleep(time.Millisecond * 500)
 
-	// Проверяем записи
 	t.Run("verify all writes", func(t *testing.T) {
 		for i := 0; i < numGoroutines; i++ {
 			for j := 0; j < operationsPerGoroutine; j++ {
