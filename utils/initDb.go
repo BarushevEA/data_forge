@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"github.com/BarushevEA/data_forge/internal/db"
+	"github.com/BarushevEA/data_forge/internal/dbPool"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/data_forge/types"
 	"sync"
@@ -36,10 +37,12 @@ func GetDB() (dbTypes.ITableDB, error) {
 		case "sqlite":
 			var err error
 
-			dataBase, err = db.NewSQLiteDB(getSQLiteOptions())
+			sqLiteDB, err := db.NewSQLiteDB(getSQLiteOptions())
 			if err != nil {
 				initError = err
 			}
+
+			dataBase = dbPool.NewPoolController(sqLiteDB, dbConfig.WritePoolInterval, dbConfig.MaxPoolSize)
 		default:
 			initError = fmt.Errorf("unsupported database type: %s", dbConfig.DBType)
 		}
