@@ -2,6 +2,7 @@ package dbPool
 
 import (
 	"context"
+	"fmt"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	"github.com/BarushevEA/in_memory_cache/types"
@@ -104,19 +105,38 @@ func (controller *PoolController) Delete(ctx context.Context, tableName, key str
 	controller.poolMutex.Lock()
 	defer controller.poolMutex.Unlock()
 
-	poolKeys, ok := controller.deletePool.Get(tableName)
+	if writeKeys, ok := controller.writePool.Get(tableName); ok {
+		newWriteKeys := make([]string, 0, len(writeKeys))
+		for _, k := range writeKeys {
+			if k != key {
+				newWriteKeys = append(newWriteKeys, k)
+			}
+		}
+
+		if len(newWriteKeys) > 0 {
+			if err := controller.writePool.Set(tableName, newWriteKeys); err != nil {
+				return fmt.Errorf("failed to update write pool: %v", err)
+			}
+		} else {
+			controller.writePool.Delete(tableName)
+		}
+	}
+
+	deleteKeys, ok := controller.deletePool.Get(tableName)
 	if !ok {
-		poolKeys = make([]string, 0, controller.maxPoolSize)
+		deleteKeys = make([]string, 0, 1)
+	}
+	deleteKeys = append(deleteKeys, key)
+
+	if err := controller.deletePool.Set(tableName, deleteKeys); err != nil {
+		return fmt.Errorf("failed to update delete pool: %v", err)
 	}
 
-	poolKeys = append(poolKeys, key)
-	err := controller.deletePool.Set(tableName, poolKeys)
-	if err != nil {
-		return err
-	}
-
-	if len(poolKeys) >= controller.maxPoolSize {
-		return controller.deletePoolFlush(tableName)
+	if len(deleteKeys) >= controller.maxPoolSize {
+		if err := controller.deleteKeys(tableName, deleteKeys); err != nil {
+			return fmt.Errorf("failed to flush delete pool: %v", err)
+		}
+		controller.deletePool.Delete(tableName)
 	}
 
 	return nil
@@ -194,29 +214,32 @@ func (controller *PoolController) deletePoolFlush(tableName string) error {
 }
 
 func (controller *PoolController) deleteKeys(tableName string, deleteKeys []string) error {
-	writeKeys, ok := controller.writePool.Get(tableName)
+	deleteSet := make(map[string]struct{}, len(deleteKeys))
+	for _, key := range deleteKeys {
+		deleteSet[key] = struct{}{}
+	}
 
-	newWriteKeys := make([]string, 0, len(writeKeys))
-
-	for _, deleteKey := range deleteKeys {
-		if ok {
-			for _, writeKey := range writeKeys {
-				if deleteKey == writeKey {
-					continue
-				}
-				newWriteKeys = append(newWriteKeys, writeKey)
+	if writeKeys, ok := controller.writePool.Get(tableName); ok {
+		newWriteKeys := make([]string, 0, len(writeKeys))
+		for _, key := range writeKeys {
+			if _, exists := deleteSet[key]; !exists {
+				newWriteKeys = append(newWriteKeys, key)
 			}
 		}
 
-		err := controller.db.Delete(context.Background(), tableName, deleteKey)
-		if err != nil {
-			return err
+		if len(newWriteKeys) > 0 {
+			if err := controller.writePool.Set(tableName, newWriteKeys); err != nil {
+				return err
+			}
+		} else {
+			controller.writePool.Delete(tableName)
 		}
 	}
 
-	err := controller.writePool.Set(tableName, newWriteKeys)
-	if err != nil {
-		return err
+	for _, key := range deleteKeys {
+		if err := controller.db.Delete(context.Background(), tableName, key); err != nil {
+			return err
+		}
 	}
 
 	controller.deletePool.Delete(tableName)
