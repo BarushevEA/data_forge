@@ -59,7 +59,7 @@ func NewSQLiteDB(opts ISQLiteOptions) (dbTypes.ITableDB, error) {
 	}, nil
 }
 
-func (controller *SQLiteDB) RegisterTable(tableName string, tableType types.ITable[any]) error {
+func (controller *SQLiteDB) RegisterTable(tableName string, table types.ITableRegister) error {
 	return nil
 }
 

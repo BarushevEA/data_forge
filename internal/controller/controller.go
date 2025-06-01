@@ -17,17 +17,25 @@ type TableController[T any] struct {
 	TTLDecrement time.Duration
 	cache        lib.ICacheInMemory[T]
 	db           dbTypes.ITableDB
+
+	destroyCallback func(tableName string)
 }
 
 func NewTableController[T any](option types.TableOption[T], db dbTypes.ITableDB) (types.ITable[T], error) {
-	return &TableController[T]{
+	controller := &TableController[T]{
 		db:           db,
 		TableName:    option.TableName,
 		TableType:    option.TableType,
 		Context:      option.Context,
 		TTL:          option.TTL,
 		TTLDecrement: option.TTLDecrement,
-	}, nil
+	}
+
+	err := db.RegisterTable(option.TableName, controller)
+	if err != nil {
+		return nil, err
+	}
+	return controller, nil
 }
 
 func (table *TableController[T]) Get(key string) (T, bool) {
@@ -91,8 +99,16 @@ func (table *TableController[T]) BatchDelete(keys []string) error {
 }
 
 func (table *TableController[T]) Destroy() error {
-	//TODO implement me
-	panic("implement me")
+	defer func() {
+		if table.destroyCallback != nil {
+			table.destroyCallback(table.TableName)
+		}
+	}()
+	return nil
+}
+
+func (table *TableController[T]) SetDestroyCallback(callback func(tableName string)) {
+	table.destroyCallback = callback
 }
 
 func (table *TableController[T]) Clear() error {

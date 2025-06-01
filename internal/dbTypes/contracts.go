@@ -6,7 +6,7 @@ import (
 )
 
 type ITableDB interface {
-	RegisterTable(tableName string, tableType types.ITable[any]) error
+	RegisterTable(tableName string, table types.ITableRegister) error
 
 	// CreateTable creates a new table with the given name
 	CreateTable(ctx context.Context, name string) error

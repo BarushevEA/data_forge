@@ -20,7 +20,7 @@ type PoolController struct {
 
 	writePool  types.ICacheInMemory[[]string]
 	deletePool types.ICacheInMemory[[]string]
-	tables     types.ICacheInMemory[lib.ITable[any]]
+	tables     types.ICacheInMemory[lib.ITableRegister]
 }
 
 func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int) dbTypes.ITableDB {
@@ -41,7 +41,7 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
 		),
-		tables: pkg.NewShardedCache[lib.ITable[any]](
+		tables: pkg.NewShardedCache[lib.ITableRegister](
 			stmtsOptions.Ctx,
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
@@ -49,8 +49,8 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 	}
 }
 
-func (controller *PoolController) RegisterTable(tableName string, tableType lib.ITable[any]) error {
-	return controller.tables.Set(tableName, tableType)
+func (controller *PoolController) RegisterTable(tableName string, table lib.ITableRegister) error {
+	return controller.tables.Set(tableName, table)
 }
 
 func (controller *PoolController) CreateTable(ctx context.Context, name string) error {

@@ -1,6 +1,8 @@
 package types
 
-import "github.com/BarushevEA/in_memory_cache/types"
+import (
+	"github.com/BarushevEA/in_memory_cache/types"
+)
 
 // ITable represents an interface for managing a key-value table with analytics capabilities
 type ITable[T any] interface {
@@ -62,6 +64,9 @@ type ITable[T any] interface {
 
 	// Len returns the current number of elements in the table
 	Len() int
+}
 
+type ITableRegister interface {
 	Serialize(key string) ([]byte, error)
+	SetDestroyCallback(callback func(tableName string))
 }
