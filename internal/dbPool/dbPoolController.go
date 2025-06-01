@@ -6,6 +6,7 @@ import (
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	"github.com/BarushevEA/in_memory_cache/types"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,8 @@ type PoolController struct {
 
 	stopChan chan struct{}
 	ticker   *time.Ticker
+
+	poolMutex sync.Mutex
 }
 
 func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int) dbTypes.ITableDB {
@@ -72,6 +75,9 @@ func (controller *PoolController) DropTable(ctx context.Context, name string) er
 }
 
 func (controller *PoolController) Set(ctx context.Context, tableName, key string, value []byte) error {
+	controller.poolMutex.Lock()
+	defer controller.poolMutex.Unlock()
+
 	poolKeys, ok := controller.writePool.Get(tableName)
 	if !ok {
 		poolKeys = make([]string, 0, controller.maxPoolSize)
@@ -95,6 +101,9 @@ func (controller *PoolController) Get(ctx context.Context, tableName, key string
 }
 
 func (controller *PoolController) Delete(ctx context.Context, tableName, key string) error {
+	controller.poolMutex.Lock()
+	defer controller.poolMutex.Unlock()
+
 	poolKeys, ok := controller.deletePool.Get(tableName)
 	if !ok {
 		poolKeys = make([]string, 0, controller.maxPoolSize)
