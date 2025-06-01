@@ -65,8 +65,3 @@ type ITable[T any] interface {
 	// Len returns the current number of elements in the table
 	Len() int
 }
-
-type ITableRegister interface {
-	Serialize(key string) ([]byte, error)
-	SetDestroyCallback(callback func(tableName string))
-}

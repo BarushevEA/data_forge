@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
-	"github.com/BarushevEA/data_forge/types"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	lib "github.com/BarushevEA/in_memory_cache/types"
 	_ "modernc.org/sqlite"
@@ -59,7 +58,7 @@ func NewSQLiteDB(opts ISQLiteOptions) (dbTypes.ITableDB, error) {
 	}, nil
 }
 
-func (controller *SQLiteDB) RegisterTable(tableName string, table types.ITableRegister) error {
+func (controller *SQLiteDB) RegisterTable(tableName string, table dbTypes.ITableRegister) error {
 	return nil
 }
 

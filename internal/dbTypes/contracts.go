@@ -2,11 +2,10 @@ package dbTypes
 
 import (
 	"context"
-	"github.com/BarushevEA/data_forge/types"
 )
 
 type ITableDB interface {
-	RegisterTable(tableName string, table types.ITableRegister) error
+	RegisterTable(tableName string, table ITableRegister) error
 
 	// CreateTable creates a new table with the given name
 	CreateTable(ctx context.Context, name string) error
@@ -33,4 +32,9 @@ type ITableDB interface {
 
 	// Close closes the database connection
 	Close() error
+}
+
+type ITableRegister interface {
+	Serialize(key string) ([]byte, error)
+	SetDestroyCallback(callback func(tableName string))
 }

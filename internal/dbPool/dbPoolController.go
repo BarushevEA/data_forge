@@ -3,7 +3,6 @@ package dbPool
 import (
 	"context"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
-	lib "github.com/BarushevEA/data_forge/types"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	"github.com/BarushevEA/in_memory_cache/types"
 	"time"
@@ -20,7 +19,7 @@ type PoolController struct {
 
 	writePool  types.ICacheInMemory[[]string]
 	deletePool types.ICacheInMemory[[]string]
-	tables     types.ICacheInMemory[lib.ITableRegister]
+	tables     types.ICacheInMemory[dbTypes.ITableRegister]
 }
 
 func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int) dbTypes.ITableDB {
@@ -41,7 +40,7 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
 		),
-		tables: pkg.NewShardedCache[lib.ITableRegister](
+		tables: pkg.NewShardedCache[dbTypes.ITableRegister](
 			stmtsOptions.Ctx,
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
@@ -49,7 +48,7 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 	}
 }
 
-func (controller *PoolController) RegisterTable(tableName string, table lib.ITableRegister) error {
+func (controller *PoolController) RegisterTable(tableName string, table dbTypes.ITableRegister) error {
 	return controller.tables.Set(tableName, table)
 }
 
