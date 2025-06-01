@@ -42,7 +42,12 @@ func GetDB() (dbTypes.ITableDB, error) {
 				initError = err
 			}
 
-			dataBase = dbPool.NewPoolController(sqLiteDB, dbConfig.WritePoolInterval, dbConfig.MaxPoolSize)
+			dataBase = dbPool.NewPoolController(
+				sqLiteDB,
+				dbConfig.WritePoolInterval,
+				dbConfig.MaxPoolSize,
+				dbConfig.IsWritePoolFlushing,
+				dbConfig.IsDeletePoolFlushing)
 		default:
 			initError = fmt.Errorf("unsupported database type: %s", dbConfig.DBType)
 		}

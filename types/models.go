@@ -28,6 +28,9 @@ type DBConfig struct {
 	// Maximum size of the writing pool
 	MaxPoolSize int
 
+	IsWritePoolFlushing  bool
+	IsDeletePoolFlushing bool
+
 	// Additional database-specific options
 	// Can be used for future DBMS support
 	Options map[string]interface{}

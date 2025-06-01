@@ -24,18 +24,23 @@ type PoolController struct {
 	deletePool types.ICacheInMemory[[]string]
 	tables     types.ICacheInMemory[dbTypes.ITableRegister]
 
+	isDeletePoolFlushing bool
+	isWritePoolFlushing  bool
+
 	stopChan chan struct{}
 	ticker   *time.Ticker
 
 	poolMutex sync.Mutex
 }
 
-func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int) dbTypes.ITableDB {
+func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, maxPoolSize int, isWritePoolFlushing, isDeletePoolFlushing bool) dbTypes.ITableDB {
 	stmtsOptions := dbTypes.GetLongDefaultShardedCacheOptions()
 	controller := &PoolController{
-		db:                db,
-		writePoolInterval: writePoolInterval,
-		maxPoolSize:       maxPoolSize,
+		db:                   db,
+		writePoolInterval:    writePoolInterval,
+		maxPoolSize:          maxPoolSize,
+		isWritePoolFlushing:  isWritePoolFlushing,
+		isDeletePoolFlushing: isDeletePoolFlushing,
 
 		writePool: pkg.NewShardedCache[[]string](
 			stmtsOptions.Ctx,
@@ -76,6 +81,10 @@ func (controller *PoolController) DropTable(ctx context.Context, name string) er
 }
 
 func (controller *PoolController) Set(ctx context.Context, tableName, key string, value []byte) error {
+	if !controller.isWritePoolFlushing {
+		return controller.db.Set(ctx, tableName, key, value)
+	}
+
 	controller.poolMutex.Lock()
 	defer controller.poolMutex.Unlock()
 
@@ -102,6 +111,10 @@ func (controller *PoolController) Get(ctx context.Context, tableName, key string
 }
 
 func (controller *PoolController) Delete(ctx context.Context, tableName, key string) error {
+	if !controller.isDeletePoolFlushing {
+		return controller.db.Delete(ctx, tableName, key)
+	}
+
 	controller.poolMutex.Lock()
 	defer controller.poolMutex.Unlock()
 

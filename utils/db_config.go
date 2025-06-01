@@ -11,11 +11,13 @@ var config *types.DBConfig
 // DefaultDBConfig returns default configuration
 func DefaultDBConfig() *types.DBConfig {
 	return &types.DBConfig{
-		DBType:            "sqlite",
-		DBPath:            "./data.db",
-		WritePoolInterval: 5 * time.Second,
-		MaxPoolSize:       1000,
-		Options:           make(map[string]interface{}),
+		DBType:               "sqlite",
+		DBPath:               "./data.db",
+		WritePoolInterval:    5 * time.Second,
+		MaxPoolSize:          1000,
+		Options:              make(map[string]interface{}),
+		IsWritePoolFlushing:  true,
+		IsDeletePoolFlushing: false,
 	}
 }
 
