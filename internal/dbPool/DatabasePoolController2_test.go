@@ -11,7 +11,6 @@ import (
 )
 
 func TestPoolController_PoolBehavior(t *testing.T) {
-	// Создаем временную директорию для тестовой БД
 	tempDir, err := os.MkdirTemp("", "test_sqlite_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -22,7 +21,6 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 	testTable := NewTestTable()
 	ctx := context.Background()
 
-	// Вспомогательная функция для создания нового контроллера
 	createController := func(poolInterval time.Duration, poolSize int) (*PoolController, error) {
 		opts := db.NewSQLiteOptions(dbPath)
 		sqliteDB, err := db.NewSQLiteDB(opts)
@@ -47,26 +45,22 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Fatalf("RegisterTable failed: %v", err)
 		}
 
-		// Записываем данные до достижения лимита пула
 		for i := 0; i < 2; i++ {
 			key := fmt.Sprintf("key_%d", i)
 			if err := controller.Set(ctx, tableName, key, nil); err != nil {
 				t.Fatalf("Set failed: %v", err)
 			}
 
-			// Проверяем размер пула
 			poolKeys, ok := controller.writePool.Get(tableName)
 			if !ok || len(poolKeys) != i+1 {
 				t.Errorf("Write pool size mismatch: got %d, want %d", len(poolKeys), i+1)
 			}
 		}
 
-		// Добавляем последний ключ, который должен вызвать запись в БД
 		if err := controller.Set(ctx, tableName, "trigger_key", nil); err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}
 
-		// Проверяем, что пул очистился
 		poolKeys, ok := controller.writePool.Get(tableName)
 		if ok && len(poolKeys) > 0 {
 			t.Errorf("Write pool should be empty after flush, got size: %d", len(poolKeys))
@@ -88,33 +82,27 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Fatalf("RegisterTable failed: %v", err)
 		}
 
-		// Записываем данные в write pool
 		key := "interaction_test"
 		if err := controller.Set(ctx, tableName, key, nil); err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}
 
-		// Проверяем наличие ключа в write pool
 		writeKeys, ok := controller.writePool.Get(tableName)
 		if !ok || len(writeKeys) == 0 {
 			t.Fatal("Key should be in write pool")
 		}
 
-		// Удаляем ключ
 		if err := controller.Delete(ctx, tableName, key); err != nil {
 			t.Fatalf("Delete failed: %v", err)
 		}
 
-		// Проверяем, что ключ появился в delete pool
 		deleteKeys, ok := controller.deletePool.Get(tableName)
 		if !ok || len(deleteKeys) == 0 {
 			t.Fatal("Key should be in delete pool")
 		}
 
-		// Ждем автоматической синхронизации
 		time.Sleep(time.Millisecond * 150)
 
-		// Проверяем, что ключ не остался в write pool
 		writeKeys, ok = controller.writePool.Get(tableName)
 		if ok && len(writeKeys) > 0 {
 			for _, k := range writeKeys {
@@ -140,7 +128,6 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Fatalf("RegisterTable failed: %v", err)
 		}
 
-		// Добавляем данные в оба пула
 		for i := 0; i < 3; i++ {
 			key := fmt.Sprintf("periodic_key_%d", i)
 			if err := controller.Set(ctx, tableName, key, nil); err != nil {
@@ -153,7 +140,6 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Fatalf("Delete failed: %v", err)
 		}
 
-		// Проверяем начальное состояние пулов
 		writeKeys, _ := controller.writePool.Get(tableName)
 		deleteKeys, _ := controller.deletePool.Get(tableName)
 
@@ -164,10 +150,8 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Error("Delete pool should not be empty initially")
 		}
 
-		// Ждем автоматического обновления
 		time.Sleep(time.Millisecond * 150)
 
-		// Проверяем, что пулы очистились
 		writeKeys, writeOk := controller.writePool.Get(tableName)
 		deleteKeys, deleteOk := controller.deletePool.Get(tableName)
 
@@ -178,7 +162,6 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Error("Delete pool should be empty after periodic flush")
 		}
 
-		// Проверяем состояние в БД
 		_, exists, err := controller.Get(ctx, tableName, deleteKey)
 		if err != nil {
 			t.Fatalf("Get failed: %v", err)
@@ -187,7 +170,6 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			t.Error("Deleted key should not exist in DB")
 		}
 
-		// Проверяем оставшиеся ключи
 		for i := 1; i < 3; i++ {
 			key := fmt.Sprintf("periodic_key_%d", i)
 			_, exists, err := controller.Get(ctx, tableName, key)
