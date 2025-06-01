@@ -36,5 +36,5 @@ type ITableDB interface {
 
 type ITableRegister interface {
 	Serialize(key string) ([]byte, error)
-	SetDestroyCallback(callback func(tableName string))
+	//SetDestroyCallback(callback func(tableName string))
 }

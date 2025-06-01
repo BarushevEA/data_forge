@@ -18,7 +18,7 @@ type TableController[T any] struct {
 	cache        lib.ICacheInMemory[T]
 	db           dbTypes.ITableDB
 
-	destroyCallback func(tableName string)
+	//destroyCallback func(tableName string)
 }
 
 func NewTableController[T any](option types.TableOption[T], db dbTypes.ITableDB) (types.ITable[T], error) {
@@ -99,16 +99,16 @@ func (table *TableController[T]) BatchDelete(keys []string) error {
 }
 
 func (table *TableController[T]) Destroy() error {
-	defer func() {
-		if table.destroyCallback != nil {
-			table.destroyCallback(table.TableName)
-		}
-	}()
+	//defer func() {
+	//	if table.destroyCallback != nil {
+	//		table.destroyCallback(table.TableName)
+	//	}
+	//}()
 	return nil
 }
 
 func (table *TableController[T]) SetDestroyCallback(callback func(tableName string)) {
-	table.destroyCallback = callback
+	//table.destroyCallback = callback
 }
 
 func (table *TableController[T]) Clear() error {

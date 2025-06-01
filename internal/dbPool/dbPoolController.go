@@ -2,10 +2,10 @@ package dbPool
 
 import (
 	"context"
-	"fmt"
 	"github.com/BarushevEA/data_forge/internal/dbTypes"
 	"github.com/BarushevEA/in_memory_cache/pkg"
 	"github.com/BarushevEA/in_memory_cache/types"
+	"log"
 	"time"
 )
 
@@ -122,9 +122,15 @@ func (controller *PoolController) BatchGet(ctx context.Context, tableName string
 }
 
 func (controller *PoolController) Close() error {
+	close(controller.stopChan)
+
+	controller.deletePoolFlushAll()
+	controller.writePoolFlushAll()
+
 	controller.writePool.Clear()
 	controller.deletePool.Clear()
 	controller.tables.Clear()
+
 	return controller.db.Close()
 }
 
@@ -216,6 +222,7 @@ func (controller *PoolController) Start() {
 				controller.deletePoolFlushAll()
 				controller.writePoolFlushAll()
 			case <-controller.stopChan:
+				return
 			}
 		}
 	}()
@@ -225,13 +232,13 @@ func (controller *PoolController) deletePoolFlushAll() {
 	err := controller.deletePool.Range(func(tableName string, keys []string) bool {
 		err := controller.deleteKeys(tableName, keys)
 		if err != nil {
-			fmt.Println(err)
+			log.Printf("error flushing delete pool for table %s: %v", tableName, err)
 		}
 
 		return true
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("error ranging delete pool: %v", err)
 	}
 }
 
@@ -239,12 +246,12 @@ func (controller *PoolController) writePoolFlushAll() {
 	err := controller.writePool.Range(func(tableName string, keys []string) bool {
 		err := controller.writeKeys(tableName, keys)
 		if err != nil {
-			fmt.Println(err)
+			log.Printf("error flushing write pool for table %s: %v", tableName, err)
 		}
 
 		return true
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("error ranging write pool: %v", err)
 	}
 }
