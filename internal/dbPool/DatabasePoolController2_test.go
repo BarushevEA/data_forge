@@ -27,7 +27,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SQLite DB: %v", err)
 		}
-		return NewPoolController(sqliteDB, poolInterval, poolSize).(*PoolController), nil
+		return NewPoolController(sqliteDB, poolInterval, poolSize, true, true).(*PoolController), nil
 	}
 
 	t.Run("write pool size limit", func(t *testing.T) {

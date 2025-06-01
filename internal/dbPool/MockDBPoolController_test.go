@@ -143,7 +143,7 @@ func (m *MockTable) Serialize(key string) ([]byte, error) {
 func TestPoolController_BasicOperations(t *testing.T) {
 	// Initialize test environment
 	mockDB := NewMockDB()
-	controller := NewPoolController(mockDB, time.Millisecond*100, 2).(*PoolController)
+	controller := NewPoolController(mockDB, time.Millisecond*100, 2, true, true).(*PoolController)
 	defer controller.Close()
 
 	ctx := context.Background()
@@ -214,7 +214,7 @@ func TestPoolController_BasicOperations(t *testing.T) {
 // More tests including error handling, concurrent operations, etc...
 func TestPoolController_ErrorHandling(t *testing.T) {
 	mockDB := NewMockDB()
-	controller := NewPoolController(mockDB, time.Millisecond*100, 2).(*PoolController)
+	controller := NewPoolController(mockDB, time.Millisecond*100, 2, true, true).(*PoolController)
 	defer controller.Close()
 
 	ctx := context.Background()
@@ -258,7 +258,7 @@ func TestPoolController_ErrorHandling(t *testing.T) {
 func TestPoolController_ConcurrentOperations(t *testing.T) {
 	mockDB := NewMockDB()
 	// Увеличим интервал обновления для более стабильной работы
-	controller := NewPoolController(mockDB, time.Millisecond*50, 10).(*PoolController)
+	controller := NewPoolController(mockDB, time.Millisecond*50, 10, true, true).(*PoolController)
 	defer controller.Close()
 
 	ctx := context.Background()

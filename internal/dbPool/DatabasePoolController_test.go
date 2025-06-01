@@ -49,7 +49,7 @@ func TestPoolController_WithSQLite(t *testing.T) {
 	}
 
 	// Create pool controller with small interval and pool size for testing
-	controller := NewPoolController(sqliteDB, time.Millisecond*100, 5).(*PoolController)
+	controller := NewPoolController(sqliteDB, time.Millisecond*100, 5, true, true).(*PoolController)
 	defer controller.Close()
 
 	ctx := context.Background()
