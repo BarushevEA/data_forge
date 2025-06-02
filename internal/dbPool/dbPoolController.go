@@ -132,6 +132,16 @@ func (controller *PoolController) Set(ctx context.Context, tableName, key string
 
 // Get retrieves a value from the database by table name and key.
 func (controller *PoolController) Get(ctx context.Context, tableName, key string) ([]byte, bool, error) {
+	if controller.isDeletePoolFlushing {
+		if keys, exists := controller.deletePool.Get(tableName); exists {
+			for _, deletedKey := range keys {
+				if deletedKey == key {
+					return nil, false, nil
+				}
+			}
+		}
+	}
+
 	return controller.db.Get(ctx, tableName, key)
 }
 

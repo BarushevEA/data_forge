@@ -17,7 +17,7 @@ func DefaultDBConfig() *types.DBConfig {
 		MaxPoolSize:          1000,
 		Options:              make(map[string]interface{}),
 		IsWritePoolFlushing:  true,
-		IsDeletePoolFlushing: false,
+		IsDeletePoolFlushing: true,
 	}
 }
 
