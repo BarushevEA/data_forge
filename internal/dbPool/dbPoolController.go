@@ -164,16 +164,23 @@ func (controller *PoolController) BatchGet(ctx context.Context, tableName string
 }
 
 func (controller *PoolController) Close() error {
-	close(controller.stopChan)
+	select {
+	case <-controller.stopChan:
+	default:
+		close(controller.stopChan)
+		controller.deletePoolFlushAll()
+		controller.writePoolFlushAll()
 
-	controller.deletePoolFlushAll()
-	controller.writePoolFlushAll()
+		controller.writePool.Clear()
+		controller.deletePool.Clear()
+		controller.tables.Clear()
+		if err := controller.db.Close(); err != nil {
+			log.Printf("db.Close error: %v", err)
+			return err
+		}
+	}
 
-	controller.writePool.Clear()
-	controller.deletePool.Clear()
-	controller.tables.Clear()
-
-	return controller.db.Close()
+	return nil
 }
 
 func (controller *PoolController) writePoolFlush(tableName string) error {
