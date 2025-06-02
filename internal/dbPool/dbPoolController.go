@@ -197,7 +197,17 @@ func (controller *PoolController) Delete(ctx context.Context, tableName, key str
 
 // BatchSet writes multiple key-value pairs to the database.
 func (controller *PoolController) BatchSet(ctx context.Context, tableName string, items map[string][]byte) error {
-	return controller.db.BatchSet(ctx, tableName, items)
+	if !controller.isWritePoolFlushing {
+		return controller.db.BatchSet(ctx, tableName, items)
+	}
+
+	for key, bytes := range items {
+		if err := controller.Set(ctx, tableName, key, bytes); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // BatchGet retrieves multiple values from the database by table name and keys, respecting the delete pool.
