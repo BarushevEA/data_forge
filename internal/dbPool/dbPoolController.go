@@ -200,9 +200,30 @@ func (controller *PoolController) BatchSet(ctx context.Context, tableName string
 	return controller.db.BatchSet(ctx, tableName, items)
 }
 
-// BatchGet retrieves multiple values from the database by table name and keys.
+// BatchGet retrieves multiple values from the database by table name and keys, respecting the delete pool.
 func (controller *PoolController) BatchGet(ctx context.Context, tableName string, keys []string) (map[string][]byte, error) {
-	return controller.db.BatchGet(ctx, tableName, keys)
+	if !controller.isDeletePoolFlushing {
+		return controller.db.BatchGet(ctx, tableName, keys)
+	}
+
+	deletedKeys, exists := controller.deletePool.Get(tableName)
+	if !exists || len(deletedKeys) == 0 {
+		return controller.db.BatchGet(ctx, tableName, keys)
+	}
+
+	deleteSet := make(map[string]struct{}, len(deletedKeys))
+	for _, key := range deletedKeys {
+		deleteSet[key] = struct{}{}
+	}
+
+	validKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, deleted := deleteSet[key]; !deleted {
+			validKeys = append(validKeys, key)
+		}
+	}
+
+	return controller.db.BatchGet(ctx, tableName, validKeys)
 }
 
 // Close shuts down the controller, flushing pools and closing the database.

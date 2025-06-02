@@ -116,3 +116,25 @@ func TestPoolController_get_Integration(t *testing.T) {
 	assert.False(t, exists)
 	assert.Empty(t, data) // Проверяем, что data — пустой срез
 }
+
+func TestPoolController_BatchGet_Consistency(t *testing.T) {
+	dbMock := &mockTableDB{}
+	dbMock.On("CreateTable", mock.Anything, "test_table").Return(nil).Once()
+	dbMock.On("BatchGet", mock.Anything, "test_table", []string{"key2"}).Return(map[string][]byte{"key2": []byte("value2")}, nil).Once()
+	dbMock.On("Delete", mock.Anything, "test_table", "key1").Return(nil).Maybe()
+
+	controller := NewPoolController(dbMock, 100*time.Millisecond, 5, true, true).(*PoolController)
+	ctx := context.Background()
+
+	err := controller.CreateTable(ctx, "test_table")
+	assert.NoError(t, err)
+
+	err = controller.Delete(ctx, "test_table", "key1")
+	assert.NoError(t, err)
+
+	result, err := controller.BatchGet(ctx, "test_table", []string{"key1", "key2"})
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, []byte("value2"), result["key2"])
+	assert.NotContains(t, result, "key1")
+}
