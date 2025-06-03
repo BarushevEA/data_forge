@@ -160,6 +160,9 @@ func TestPoolController_DropTable(t *testing.T) {
 
 	// 11. Test setting new data
 	mockDB.On("Set", mock.Anything, "T", "key3", []byte("value3")).Return(nil).Maybe()
+	mockDB.On("BatchSet", mock.Anything, "T", mock.MatchedBy(func(items map[string][]byte) bool {
+		return len(items) == 1 && string(items["key3"]) == "value3"
+	})).Return(nil).Maybe()
 	err = pc.Set(context.Background(), "T", "key3", []byte("value3"))
 	assert.NoError(t, err, "Expected no error when setting key3")
 
