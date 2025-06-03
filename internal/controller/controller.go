@@ -91,11 +91,6 @@ func (table *TableController[T]) Set(key string, value T) error {
 		return err
 	}
 
-	//err = table.writePool.Set(key, value)
-	//if err != nil {
-	//	return err
-	//}
-
 	return table.db.Set(table.Context, table.TableName, key, nil)
 }
 
@@ -107,7 +102,6 @@ func (table *TableController[T]) Delete(key string) error {
 
 	table.cache.Delete(key)
 	table.lostKeys.Delete(key)
-	//table.writePool.Delete(key)
 	return nil
 }
 
@@ -117,8 +111,20 @@ func (table *TableController[T]) GetTop() (map[string]T, error) {
 }
 
 func (table *TableController[T]) BatchGet(keys []string) ([]lib.BatchNode[T], error) {
-	//TODO implement me
-	panic("implement me")
+	nodes := make([]lib.BatchNode[T], len(keys))
+	for i, key := range keys {
+		data, exists := table.Get(key)
+		if exists {
+			nodes[i] = lib.BatchNode[T]{
+				Key:    key,
+				Value:  data,
+				Exists: true,
+			}
+			continue
+		}
+	}
+
+	return nodes, nil
 }
 
 func (table *TableController[T]) Range(callback func(key string, value T) bool) error {
@@ -132,8 +138,13 @@ func (table *TableController[T]) RangeCacheMetrics(callback func(metric lib.Metr
 }
 
 func (table *TableController[T]) BatchSet(items map[string]T) error {
-	//TODO implement me
-	panic("implement me")
+	for key, value := range items {
+		err := table.Set(key, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (table *TableController[T]) SetTopLimit(limit uint) error {
@@ -152,17 +163,27 @@ func (table *TableController[T]) SetTopWriteThreshold(threshold uint) error {
 }
 
 func (table *TableController[T]) BatchDelete(keys []string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (table *TableController[T]) Destroy() error {
+	for _, key := range keys {
+		err := table.Delete(key)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
+func (table *TableController[T]) Destroy() error {
+	err := table.db.DropTable(table.Context, table.TableName)
+	if err != nil {
+		return err
+	}
+	return table.Clear()
+}
+
 func (table *TableController[T]) Clear() error {
-	//TODO implement me
-	panic("implement me")
+	table.cache.Clear()
+	table.lostKeys.Clear()
+	return table.db.Close()
 }
 
 func (table *TableController[T]) Len() int {
