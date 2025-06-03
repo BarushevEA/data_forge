@@ -91,7 +91,12 @@ func (table *TableController[T]) Set(key string, value T) error {
 		return err
 	}
 
-	return table.db.Set(table.Context, table.TableName, key, nil)
+	serialized, err := table.Serialize(key)
+	if err != nil {
+		return err
+	}
+
+	return table.db.Set(table.Context, table.TableName, key, serialized)
 }
 
 func (table *TableController[T]) Delete(key string) error {
