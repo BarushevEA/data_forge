@@ -1,6 +1,7 @@
 package dbPool
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -56,7 +57,7 @@ func TestPoolController_WithSQLite(t *testing.T) {
 	tableName := "test_table"
 	testTable := NewTestTable()
 
-	t.Run("basic operations", func(t *testing.T) {
+	t.Run("basic_operations", func(t *testing.T) {
 		// Create and register table
 		if err := controller.CreateTable(ctx, tableName); err != nil {
 			t.Fatalf("CreateTable failed: %v", err)
@@ -66,7 +67,8 @@ func TestPoolController_WithSQLite(t *testing.T) {
 		}
 
 		// Test Set operation
-		err := controller.Set(ctx, tableName, "test1", nil) // value doesn't matter here
+		expectedValue := []byte("value")
+		err := controller.Set(ctx, tableName, "test1", expectedValue)
 		if err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}
@@ -83,18 +85,12 @@ func TestPoolController_WithSQLite(t *testing.T) {
 			t.Fatal("Data should exist in DB")
 		}
 
-		var retrievedData TestData
-		if err := json.Unmarshal(data, &retrievedData); err != nil {
-			t.Fatalf("Failed to unmarshal data: %v", err)
-		}
-
-		expectedValue := fmt.Sprintf("value_%s", "test1")
-		if retrievedData.Value != expectedValue {
-			t.Errorf("Wrong value: got %s, want %s", retrievedData.Value, expectedValue)
+		if !bytes.Equal(data, expectedValue) {
+			t.Errorf("Wrong value: got %s, want %s", string(data), string(expectedValue))
 		}
 	})
 
-	t.Run("batch operations", func(t *testing.T) {
+	t.Run("batch_operations", func(t *testing.T) {
 		// Prepare batch data
 		batchSize := 10
 		items := make(map[string][]byte)
@@ -149,7 +145,7 @@ func TestPoolController_WithSQLite(t *testing.T) {
 		}
 	})
 
-	t.Run("concurrent operations", func(t *testing.T) {
+	t.Run("concurrent_operations", func(t *testing.T) {
 		var wg sync.WaitGroup
 		numGoroutines := 5
 		operationsPerGoroutine := 20
@@ -163,7 +159,7 @@ func TestPoolController_WithSQLite(t *testing.T) {
 				defer wg.Done()
 				for j := 0; j < operationsPerGoroutine; j++ {
 					key := fmt.Sprintf("concurrent_key_%d_%d", id, j)
-					if err := controller.Set(ctx, tableName, key, nil); err != nil {
+					if err := controller.Set(ctx, tableName, key, []byte("value")); err != nil {
 						errorChan <- fmt.Errorf("Set failed for key %s: %v", key, err)
 					}
 					time.Sleep(time.Millisecond) // Small delay between operations
@@ -196,24 +192,17 @@ func TestPoolController_WithSQLite(t *testing.T) {
 					continue
 				}
 
-				var retrievedData TestData
-				if err := json.Unmarshal(data, &retrievedData); err != nil {
-					t.Errorf("Failed to unmarshal data for key %s: %v", key, err)
-					continue
-				}
-
-				expectedValue := fmt.Sprintf("value_%s", key)
-				if retrievedData.Value != expectedValue {
-					t.Errorf("Wrong value for key %s: got %s, want %s", key, retrievedData.Value, expectedValue)
+				if !bytes.Equal(data, []byte("value")) {
+					t.Errorf("Wrong value for key %s: got %s, want %s", key, string(data), "value")
 				}
 			}
 		}
 	})
 
-	t.Run("delete operations", func(t *testing.T) {
+	t.Run("delete_operations", func(t *testing.T) {
 		// Create test data
 		key := "to_delete"
-		err := controller.Set(ctx, tableName, key, nil)
+		err := controller.Set(ctx, tableName, key, []byte("value"))
 		if err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}

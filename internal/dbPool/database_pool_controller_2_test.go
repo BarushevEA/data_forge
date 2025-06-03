@@ -30,7 +30,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 		return NewPoolController(sqliteDB, poolInterval, poolSize, true, true).(*PoolController), nil
 	}
 
-	t.Run("write pool size limit", func(t *testing.T) {
+	t.Run("write_pool_size_limit", func(t *testing.T) {
 		controller, err := createController(time.Second, 3)
 		if err != nil {
 			t.Fatal(err)
@@ -47,7 +47,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 
 		for i := 0; i < 2; i++ {
 			key := fmt.Sprintf("key_%d", i)
-			if err := controller.Set(ctx, tableName, key, nil); err != nil {
+			if err := controller.Set(ctx, tableName, key, []byte("value")); err != nil {
 				t.Fatalf("Set failed: %v", err)
 			}
 
@@ -57,7 +57,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 			}
 		}
 
-		if err := controller.Set(ctx, tableName, "trigger_key", nil); err != nil {
+		if err := controller.Set(ctx, tableName, "trigger_key", []byte("value")); err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}
 
@@ -67,7 +67,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 		}
 	})
 
-	t.Run("delete pool interaction with write pool", func(t *testing.T) {
+	t.Run("delete_pool_interaction_with_write_pool", func(t *testing.T) {
 		controller, err := createController(time.Second, 5)
 		if err != nil {
 			t.Fatal(err)
@@ -83,7 +83,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 		}
 
 		key := "interaction_test"
-		if err := controller.Set(ctx, tableName, key, nil); err != nil {
+		if err := controller.Set(ctx, tableName, key, []byte("value")); err != nil {
 			t.Fatalf("Set failed: %v", err)
 		}
 
@@ -113,7 +113,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 		}
 	})
 
-	t.Run("pool periodic flush", func(t *testing.T) {
+	t.Run("pool_periodic_flush", func(t *testing.T) {
 		controller, err := createController(time.Millisecond*100, 10)
 		if err != nil {
 			t.Fatal(err)
@@ -130,7 +130,7 @@ func TestPoolController_PoolBehavior(t *testing.T) {
 
 		for i := 0; i < 3; i++ {
 			key := fmt.Sprintf("periodic_key_%d", i)
-			if err := controller.Set(ctx, tableName, key, nil); err != nil {
+			if err := controller.Set(ctx, tableName, key, []byte("value")); err != nil {
 				t.Fatalf("Set failed: %v", err)
 			}
 		}
