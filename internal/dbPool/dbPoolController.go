@@ -31,9 +31,6 @@ type PoolController struct {
 	// deletePool stores keys pending to be deleted from the database.
 	deletePool types.ICacheInMemory[[]string]
 
-	// tables stores registered table schemas.
-	tables types.ICacheInMemory[dbTypes.ITableRegister]
-
 	// isDeletePoolFlushing enables or disables the delete pool; if false, deletes bypass the pool.
 	isDeletePoolFlushing bool
 
@@ -74,11 +71,6 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 			stmtsOptions.Ttl,
 			stmtsOptions.TtlDecrement,
 		),
-		tables: pkg.NewShardedCache[dbTypes.ITableRegister](
-			stmtsOptions.Ctx,
-			stmtsOptions.Ttl,
-			stmtsOptions.TtlDecrement,
-		),
 		sigStopChan: make(chan struct{}),
 		ticker:      time.NewTicker(writePoolInterval),
 	}
@@ -90,7 +82,7 @@ func NewPoolController(db dbTypes.ITableDB, writePoolInterval time.Duration, max
 
 // RegisterTable associates a table name with its schema.
 func (controller *PoolController) RegisterTable(tableName string, table dbTypes.ITableRegister) error {
-	return controller.tables.Set(tableName, table)
+	return nil
 }
 
 // CreateTable creates a new table in the underlying database.
@@ -111,7 +103,6 @@ func (controller *PoolController) DropTable(ctx context.Context, name string) er
 	}
 	controller.writePool.Delete(name)
 	controller.deletePool.Delete(name)
-	controller.tables.Delete(name)
 	return controller.db.DropTable(ctx, name)
 }
 
@@ -343,7 +334,6 @@ func (controller *PoolController) Close() error {
 		controller.writePool.Clear()
 		controller.writePoolBoofer.Clear()
 		controller.deletePool.Clear()
-		controller.tables.Clear()
 		// Close the database connection.
 		if err := controller.db.Close(); err != nil {
 			log.Printf("db.Close error: %v", err)

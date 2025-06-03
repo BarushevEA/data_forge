@@ -107,8 +107,6 @@ func TestPoolController_DropTable(t *testing.T) {
 	assert.False(t, exists, "Write pool buffer should be cleared after DropTable")
 	_, exists = pc.deletePool.Get("T")
 	assert.False(t, exists, "Delete pool should be cleared after DropTable")
-	_, exists = pc.tables.Get("T")
-	assert.False(t, exists, "Tables cache should be cleared after DropTable")
 
 	// 5. Verify that getting data from a dropped table returns nil, false, nil
 	mockDB.On("Get", mock.Anything, "T", "key1").Return([]byte(nil), false, nil).Once()

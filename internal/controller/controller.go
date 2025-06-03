@@ -21,16 +21,13 @@ type TableController[T any] struct {
 	TTL          time.Duration
 	TTLDecrement time.Duration
 	cache        lib.ICacheInMemory[T]
-	//writePool    lib.ICacheInMemory[T]
-	lostKeys lib.ICacheInMemory[struct{}]
-	db       dbTypes.ITableDB
+	lostKeys     lib.ICacheInMemory[struct{}]
+	db           dbTypes.ITableDB
 
 	mutex sync.Mutex
 }
 
 func NewTableController[T any](option types.TableOption[T], db dbTypes.ITableDB) (types.ITable[T], error) {
-	//stmtsOptions := dbTypes.GetLongDefaultShardedCacheOptions()
-
 	controller := &TableController[T]{
 		db:           db,
 		TableName:    option.TableName,
@@ -39,15 +36,10 @@ func NewTableController[T any](option types.TableOption[T], db dbTypes.ITableDB)
 		TTL:          option.TTL,
 		TTLDecrement: option.TTLDecrement,
 		cache:        pkg.NewShardedCache[T](option.Context, option.TTL, option.TTLDecrement),
-		//writePool: pkg.NewShardedCache[T](
-		//	option.Context,
-		//	stmtsOptions.Ttl,
-		//	stmtsOptions.TtlDecrement,
-		//),
-		lostKeys: pkg.NewShardedCache[struct{}](option.Context, option.TTL, option.TTLDecrement),
+		lostKeys:     pkg.NewShardedCache[struct{}](option.Context, option.TTL, option.TTLDecrement),
 	}
 
-	err := db.RegisterTable(option.TableName, controller)
+	err := db.CreateTable(option.Context, option.TableName)
 	if err != nil {
 		return nil, err
 	}

@@ -54,8 +54,6 @@ func TestPoolController_DropTable_WithSQLite(t *testing.T) {
 	assert.False(t, exists, "Write pool buffer should be cleared after DropTable")
 	_, exists = pc.deletePool.Get("T")
 	assert.False(t, exists, "Delete pool should be cleared after DropTable")
-	_, exists = pc.tables.Get("T")
-	assert.False(t, exists, "Tables cache should be cleared after DropTable")
 
 	// 5. Recreate the table
 	err = pc.CreateTable(context.Background(), "T")

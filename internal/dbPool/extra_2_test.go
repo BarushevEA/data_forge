@@ -166,7 +166,6 @@ func TestPoolController_Close(t *testing.T) {
 	assert.Equal(t, 0, controller.writePool.Len())
 	assert.Equal(t, 0, controller.writePoolBoofer.Len())
 	assert.Equal(t, 0, controller.deletePool.Len())
-	assert.Equal(t, 0, controller.tables.Len())
 }
 
 // TestPoolController_Integration tests the full lifecycle of PoolController operations, including Set, Get, and Delete.
