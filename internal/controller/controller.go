@@ -56,10 +56,19 @@ func (table *TableController[T]) Get(key string) (T, bool) {
 	if exists {
 		return *new(T), false
 	}
-	err := table.lostKeys.Set(key, struct{}{})
 
 	table.mutex.Lock()
 	defer table.mutex.Unlock()
+
+	_, exists = table.lostKeys.Get(key)
+	if exists {
+		return *new(T), false
+	}
+
+	err := table.lostKeys.Set(key, struct{}{})
+	if err != nil {
+		return *new(T), false
+	}
 
 	dbData, exists, err := table.db.Get(table.Context, table.TableName, key)
 	if err != nil {
@@ -117,15 +126,69 @@ func (table *TableController[T]) GetTop() (map[string]T, error) {
 
 func (table *TableController[T]) BatchGet(keys []string) ([]lib.BatchNode[T], error) {
 	nodes := make([]lib.BatchNode[T], len(keys))
+	keysForDb := make([]string, 0)
+
 	for i, key := range keys {
-		data, exists := table.Get(key)
-		if exists {
-			nodes[i] = lib.BatchNode[T]{
-				Key:    key,
-				Value:  data,
-				Exists: true,
+		data, exists := table.cache.Get(key)
+		nodes[i] = lib.BatchNode[T]{
+			Key:    key,
+			Value:  data,
+			Exists: exists,
+		}
+
+		if !exists {
+			_, exists = table.lostKeys.Get(key)
+			if !exists {
+				keysForDb = append(keysForDb, key)
+			}
+		}
+	}
+
+	if len(keysForDb) == 0 {
+		return nodes, nil
+	}
+
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
+
+	nodesFromDB, err := table.db.BatchGet(table.Context, table.TableName, keysForDb)
+	if err != nil {
+		return nil, err
+	}
+
+	for index, _ := range nodes {
+		dbValue, existsInDB := nodesFromDB[nodes[index].Key]
+		dataExists := false
+		if !existsInDB {
+			err := table.lostKeys.Set(nodes[index].Key, struct{}{})
+			if err != nil {
+				return nil, err
 			}
 			continue
+		}
+
+		if dbValue != nil && len(dbValue) != 0 {
+			dataExists = true
+		}
+
+		data, err := table.Deserialize(dbValue)
+		if err != nil {
+			return nil, err
+		}
+		nodes[index].Value = data
+		nodes[index].Exists = dataExists
+
+		if dataExists {
+			err = table.cache.Set(nodes[index].Key, data)
+			if err != nil {
+				return nil, err
+			}
+			table.lostKeys.Delete(nodes[index].Key)
+		} else {
+			err := table.lostKeys.Set(nodes[index].Key, struct{}{})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -196,9 +259,6 @@ func (table *TableController[T]) Len() int {
 }
 
 func (table *TableController[T]) Serialize(key string) ([]byte, error) {
-	table.mutex.Lock()
-	table.mutex.Unlock()
-
 	data, exists := table.cache.Get(key)
 	if !exists {
 		return nil, fmt.Errorf("key %s not found", key)
